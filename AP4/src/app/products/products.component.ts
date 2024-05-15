@@ -1,68 +1,72 @@
-import {Component, OnInit} from '@angular/core';
-import {NgForOf} from "@angular/common";
-import {HttpClient} from "@angular/common/http";
-import {ProductsService} from "../services/products.service";
-import {Product} from "../model/product.model";
-import {FormsModule} from "@angular/forms";
-import {Observable} from "rxjs";
+import { Component, OnInit } from '@angular/core';
+import { ProductService } from '../services/product.service';
+import { Product } from '../modele/product.model';
+import {Router} from "@angular/router";
+import {AppStateService} from "../services/app-state.service";
 
 @Component({
   selector: 'app-products',
-  standalone: true,
-  imports: [
-    NgForOf,
-    FormsModule
-  ],
   templateUrl: './products.component.html',
   styleUrl: './products.component.css'
 })
+export class ProductsComponent implements OnInit {
 
-export class ProductsComponent implements OnInit{
 
-  public products : Array<Product> = [];
-
-  constructor(private productsService: ProductsService) {
+  constructor(private productService: ProductService,
+              private router: Router,
+              public appStateService: AppStateService){
   }
 
-  ngOnInit(){
-    this.productsService.getProducts()
-      .subscribe({
-        next : data => {
-          this.products = data
-          console.log(data)
-        },
-        error : err => {
-          console.error(err)
-        }
-      })
+  ngOnInit(): void {
+    this.searchProducts();
   }
 
-  handleCheckProduct(product: Product)  {
-    this.productsService.checkProduct(product)
+
+  handleCheckProduct(product: Product) {
+    this.productService.checkProduct(product)
       .subscribe({
-        next : updateProduct => {
-          product.check = !product.check
+        next: updatedProduct => {
+          product.checked != product.checked
         }
       })
-
+    product.checked = !product.checked;
   }
 
   handleDeleteProduct(product: Product) {
-    if(confirm("Are you sure you want to delete this product?"))
-      this.productsService.deleteProduct(product)
-  .subscribe({
-        next : value => {
-          this.products = this.products.filter(p => p.id !== product.id)
+    if (confirm("u sure?"))
+      this.productService.deleteProduct(product).subscribe({
+        next: val => {
+          //this.appStateService.productState.products = this.appStateService.productState.products.filter((p:any) => p.id != product.id)
+          this.searchProducts();
         }
       })
   }
 
-  searchProducts() {
-    this.productsService.searchProducts(this.keyword).subscribe({
-        next : value => {
-          this.products = value;
-        }
-      })
+  handleGoToPage(page: number) {
+    this.appStateService.productState.currentPage= page;
+    this.searchProducts();
   }
 
+  public searchProducts() {
+    // this.appStateService.setProductState({status: "LOADING"});
+    this.productService.searchProducts(this.appStateService.productState.keyword, this.appStateService.productState.currentPage, this.appStateService.productState.pageSize).subscribe({
+      next: res => {
+        let products = res.body as Product[];
+        let totalProducts: number = parseInt(res.headers.get('X-Total-Count')!);
+        //this.appStateService.productState.totalProducts = totalProducts;
+        let totalPages = Math.floor(totalProducts / this.appStateService.productState.pageSize);
+        if (totalProducts % this.appStateService.productState.pageSize != 0) this.appStateService.productState.totalPages++;
+        this.appStateService.setProductState({
+          products: products,
+          totalProducts: totalProducts,
+          totalPages: totalPages
+        })
+        },
+      error: err => this.appStateService.setProductState({status: "ERROR", errorMessage: err})
+    });
+  }
+
+    handleEditProduct(product: Product) {
+      this.router.navigateByUrl('/admin/editProduct/' + product.id)
+    }
 }
